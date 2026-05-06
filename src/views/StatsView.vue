@@ -5,7 +5,7 @@
         <div class="left">
           <RouterLink class="nav-home" to="/">← 首页</RouterLink>
           <button type="button" :class="{ active: view === 'month' }" @click="switchView('month')">当月</button>
-          <button type="button" :class="{ active: view === 'year' }" @click="switchView('year')">总览</button>
+          <button type="button" @click="goToPreviousMonth">上月</button>
           <select v-model.number="selectedMonth" @change="onMonthChange">
             <option v-for="m in 12" :key="m" :value="m">{{ m }}月</option>
           </select>
@@ -13,9 +13,12 @@
           <button type="button" @click="importInput?.click()">导入 Excel</button>
           <input ref="importInput" class="hidden" type="file" accept=".xlsx,.xls" @change="importFromExcel" />
         </div>
-        <div class="header-summary">
-          <div v-if="view === 'month'" class="card">本月：{{ format(monthTotal) }}</div>
-          <div v-if="view === 'month'" class="card">{{ monthLeaveText }}</div>
+        <div class="header-end">
+          <div class="header-summary">
+            <div v-if="view === 'month'" class="card">本月：{{ format(monthTotal) }}</div>
+            <div v-if="view === 'month'" class="card">{{ monthLeaveText }}</div>
+          </div>
+          <button type="button" :class="{ active: view === 'year' }" @click="switchView('year')">总览</button>
         </div>
       </div>
     </header>
@@ -77,6 +80,7 @@ const {
   yearDiffClass,
   switchView,
   onMonthChange,
+  goToPreviousMonth,
   exportFullYearExcel,
   importFromExcel,
 } = useWorkStats(containerRef);
@@ -116,6 +120,17 @@ header {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.header-end {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .header-summary {

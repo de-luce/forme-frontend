@@ -1,6 +1,10 @@
 /**
  * VITE_API_BASE：后端根地址，无尾部斜杠。
- * 若 Nginx 将 https://你的域名/api 反代到 Java，可设为 ''，请求使用同源 /api/...
+ * 若 Nginx 将站点与 /api 反代到 Java，可留空或不设，请求走同源 `/api/...`。
+ *
+ * 注意：`getApiBase()` 为空字符串 `''` 在 JS 中为假值，不能用 `if (!getApiBase())`
+ * 跳过接口——空表示同源 API，仍必须请求后端。
+ * 具体路径见 ./paths.js。
  */
 export function getApiBase() {
   const raw = import.meta.env.VITE_API_BASE;
@@ -10,9 +14,10 @@ export function getApiBase() {
   return String(raw).trim().replace(/\/$/, '');
 }
 
-export function getApiKey() {
-  const k = import.meta.env.VITE_API_KEY;
-  return k != null ? String(k).trim() : '';
+/** 是否配置了独立主机（非空）。仅用于展示/日志，不应拿来决定是否调后端。 */
+export function hasExplicitApiHost() {
+  const raw = import.meta.env.VITE_API_BASE;
+  return raw != null && String(raw).trim() !== '';
 }
 
 export function apiUrl(path) {
@@ -23,9 +28,9 @@ export function apiUrl(path) {
 }
 
 export function apiHeaders(json) {
-  const h = {};
+  const h = {
+    Accept: 'application/json',
+  };
   if (json) h['Content-Type'] = 'application/json';
-  const key = getApiKey();
-  if (key) h['X-API-Key'] = key;
   return h;
 }

@@ -1,6 +1,5 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { getApiBase } from '@/api/config.js';
-import { fetchWorkYear, saveWorkYear } from '@/api/workYear.js';
+import { fetchWorkYear, putWorkDay, saveWorkYear } from '@/api/workYear.js';
 import {
   STANDARD,
   daysInMonth,
@@ -16,8 +15,12 @@ import { useWorkStatsExcel } from './useWorkStatsExcel.js';
 const YEAR = new Date().getFullYear();
 const TODAY = new Date();
 
+function clonePlain(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 /**
- * 工时页状态与持久化。视图层只负责模板与 DOM ref（如 container）。
+ * 工时页：加载按年 GET；单日修改走 PUT/DELETE；Excel 导入走按年 PUT。
  */
 export function useWorkStats(containerRef) {
   const data = reactive({});
@@ -25,73 +28,79 @@ export function useWorkStats(containerRef) {
   const view = ref('month');
   const importInput = ref(null);
 
-  let workSaveTimer = null;
+  /** @type {Record<string, ReturnType<typeof setTimeout>>} */
+  const cellTimers = {};
 
-  function loadLocalWork() {
+  function clearCellTimer(m, d) {
+    const k = `${m}-${d}`;
+    if (cellTimers[k]) {
+      clearTimeout(cellTimers[k]);
+      delete cellTimers[k];
+    }
+  }
+
+  function scheduleCellSync(m, d) {
+    const k = `${m}-${d}`;
+    clearCellTimer(m, d);
+    cellTimers[k] = setTimeout(() => {
+      delete cellTimers[k];
+      void flushOneCell(m, d);
+    }, 450);
+  }
+
+  async function flushOneCell(m, d) {
+    const k = dayKey(YEAR, m, d);
+    const raw = data[k];
+    const str = raw != null ? String(raw).trim() : '';
     try {
-      const raw = localStorage.getItem('work-' + YEAR);
-      const obj = raw ? JSON.parse(raw) : {};
-      Object.keys(data).forEach((k) => delete data[k]);
-      Object.assign(data, obj && typeof obj === 'object' ? obj : {});
-    } catch {
-      Object.keys(data).forEach((k) => delete data[k]);
+      if (!str) {
+        await putWorkDay(YEAR, m, d, '');
+        delete data[k];
+      } else {
+        const n = normalize(str);
+        await putWorkDay(YEAR, m, d, n);
+        data[k] = n;
+      }
+    } catch (e) {
+      alert('保存失败：' + (e && e.message ? e.message : String(e)));
     }
   }
 
   async function loadWorkFromServer() {
-    if (!getApiBase()) {
-      loadLocalWork();
-      return;
-    }
     try {
       const obj = await fetchWorkYear(YEAR);
-      Object.keys(data).forEach((k) => delete data[k]);
+      Object.keys(data).forEach((key) => delete data[key]);
       Object.assign(data, obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : {});
-      localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
     } catch (e) {
       console.error(e);
-      loadLocalWork();
-      alert('无法从服务器加载工时数据，已使用本地缓存');
+      alert('无法从服务器加载工时数据：' + (e && e.message ? e.message : String(e)));
     }
   }
 
-  async function flushWorkSave() {
-    try {
-      await saveWorkYear(YEAR, data);
-      localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-    } catch (e) {
-      console.error(e);
-      localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-      alert('保存到服务器失败（已写入本地缓存）');
-    }
-  }
-
-  function save() {
-    localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-    if (!getApiBase()) return;
-    clearTimeout(workSaveTimer);
-    workSaveTimer = setTimeout(flushWorkSave, 500);
-  }
-
-  const { exportFullYearExcel, importFromExcel } = useWorkStatsExcel(YEAR, data, save, view);
-
-  function cellVal(m, d) {
-    return data[dayKey(YEAR, m, d)] || '';
+  async function syncFullYearAfterImport() {
+    await saveWorkYear(YEAR, clonePlain(data));
   }
 
   function onInput(m, d, val) {
     const k = dayKey(YEAR, m, d);
     if (val) data[k] = val;
     else delete data[k];
-    save();
+    scheduleCellSync(m, d);
   }
 
   function onBlur(m, d, val) {
-    const n = normalize(val);
+    clearCellTimer(m, d);
     const k = dayKey(YEAR, m, d);
+    const n = normalize(val);
     if (n) data[k] = n;
     else delete data[k];
-    save();
+    void flushOneCell(m, d);
+  }
+
+  const { exportFullYearExcel, importFromExcel } = useWorkStatsExcel(YEAR, data, syncFullYearAfterImport, view);
+
+  function cellVal(m, d) {
+    return data[dayKey(YEAR, m, d)] || '';
   }
 
   const monthDaysList = computed(() => {
@@ -178,6 +187,11 @@ export function useWorkStats(containerRef) {
     });
   }
 
+  function goToPreviousMonth() {
+    selectedMonth.value = selectedMonth.value <= 1 ? 12 : selectedMonth.value - 1;
+    onMonthChange();
+  }
+
   onMounted(async () => {
     await loadWorkFromServer();
     await nextTick();
@@ -205,6 +219,7 @@ export function useWorkStats(containerRef) {
     yearDiffClass,
     switchView,
     onMonthChange,
+    goToPreviousMonth,
     exportFullYearExcel,
     importFromExcel,
   };

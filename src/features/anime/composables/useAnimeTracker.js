@@ -1,8 +1,12 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { getApiBase } from '@/api/config.js';
-import { fetchWatchList, saveWatchList } from '@/api/watchList.js';
+import {
+  createWatchEntry,
+  deleteWatchEntry,
+  fetchWatchList,
+  replaceWatchList,
+  updateWatchEntry,
+} from '@/api/watchList.js';
 
-const STORAGE_KEY = 'forme-anime-tracker-v1';
 export const EXPORT_FILENAME = '追番数据.json';
 
 export const statusLabel = {
@@ -19,6 +23,19 @@ export const statusClass = {
   hold: 'hold',
 };
 
+function stripLegacyFields(e) {
+  if (!e || typeof e !== 'object') return e;
+  const { season, notes, ...rest } = e;
+  return rest;
+}
+
+function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+}
+
+/**
+ * 追番：CRUD 接口 + 全量 replace（清空/合并导入）。
+ */
 export function useAnimeTracker() {
   const entries = ref([]);
   const editingId = ref(null);
@@ -47,73 +64,15 @@ export function useAnimeTracker() {
     }, 2200);
   }
 
-  function uid() {
-    return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
-  }
-
-  function stripLegacyFields(e) {
-    if (!e || typeof e !== 'object') return e;
-    const { season, notes, ...rest } = e;
-    return rest;
-  }
-
-  let saveTimer = null;
-
-  function loadLocalOnly() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        entries.value = [];
-        return;
-      }
-      const data = JSON.parse(raw);
-      entries.value = Array.isArray(data) ? data.map(stripLegacyFields) : [];
-    } catch {
-      entries.value = [];
-    }
-  }
-
   async function load() {
-    if (!getApiBase()) {
-      loadLocalOnly();
-      return;
-    }
     try {
       const data = await fetchWatchList();
       entries.value = Array.isArray(data) ? data.map(stripLegacyFields) : [];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.value));
     } catch (e) {
       console.error(e);
-      loadLocalOnly();
-      toast('服务器不可用，已使用本地缓存');
+      entries.value = [];
+      toast('无法从服务器加载：' + (e && e.message ? e.message : String(e)));
     }
-  }
-
-  async function flushSave() {
-    const list = entries.value.map(stripLegacyFields);
-    entries.value = list;
-    if (!getApiBase()) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return;
-    }
-    try {
-      await saveWatchList(list);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.error(e);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      toast('保存到服务器失败，已暂存本地');
-    }
-  }
-
-  function save() {
-    entries.value = entries.value.map(stripLegacyFields);
-    if (!getApiBase()) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.value));
-      return;
-    }
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(flushSave, 400);
   }
 
   const filtered = computed(() => {
@@ -159,7 +118,7 @@ export function useAnimeTracker() {
     form.url = '';
   }
 
-  function submitForm() {
+  async function submitForm() {
     if (!form.title.trim()) {
       toast('请填写标题');
       return;
@@ -172,17 +131,20 @@ export function useAnimeTracker() {
       url: form.url.trim() || '',
       updatedAt: Date.now(),
     };
-    if (editingId.value) {
-      const i = entries.value.findIndex((x) => x.id === editingId.value);
-      if (i >= 0) {
-        entries.value[i] = { ...entries.value[i], ...row };
+    try {
+      if (editingId.value) {
+        const prev = entries.value.find((x) => x.id === editingId.value);
+        const merged = stripLegacyFields({ ...prev, ...row, id: editingId.value });
+        await updateWatchEntry(editingId.value, merged);
         toast('已更新');
+      } else {
+        await createWatchEntry(stripLegacyFields({ id: uid(), ...row }));
+        toast('已添加');
       }
-    } else {
-      entries.value.push({ id: uid(), ...row });
-      toast('已添加');
+      await load();
+    } catch (e) {
+      toast('保存失败：' + (e && e.message ? e.message : String(e)));
     }
-    save();
     resetForm();
   }
 
@@ -190,12 +152,17 @@ export function useAnimeTracker() {
     resetForm();
   }
 
-  function epPlus(item) {
+  async function epPlus(item) {
     item.currentEp = (item.currentEp ?? 0) + 1;
     if (item.totalEp != null && item.currentEp > item.totalEp) item.currentEp = item.totalEp;
     item.updatedAt = Date.now();
-    save();
-    toast('进度 +1');
+    try {
+      await updateWatchEntry(item.id, stripLegacyFields({ ...item }));
+      toast('进度 +1');
+      await load();
+    } catch (e) {
+      toast('保存失败：' + (e && e.message ? e.message : String(e)));
+    }
   }
 
   function startEdit(item) {
@@ -208,12 +175,16 @@ export function useAnimeTracker() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function remove(id) {
+  async function remove(id) {
     if (!confirm('确定删除这条记录？')) return;
-    entries.value = entries.value.filter((x) => x.id !== id);
-    if (editingId.value === id) resetForm();
-    save();
-    toast('已删除');
+    try {
+      await deleteWatchEntry(id);
+      if (editingId.value === id) resetForm();
+      await load();
+      toast('已删除');
+    } catch (e) {
+      toast('删除失败：' + (e && e.message ? e.message : String(e)));
+    }
   }
 
   function normalizeImport(x) {
@@ -228,16 +199,22 @@ export function useAnimeTracker() {
     });
   }
 
-  function mergeImported(normalized) {
+  async function mergeImported(normalized) {
     if (!confirm(`将导入 ${normalized.length} 条记录，会与现有数据合并，是否继续？`)) return;
     const ids = new Set(entries.value.map((e) => e.id));
+    const merged = [...entries.value.map(stripLegacyFields)];
     normalized.forEach((n) => {
       if (ids.has(n.id)) n.id = uid();
-      entries.value.push(n);
+      merged.push(n);
       ids.add(n.id);
     });
-    save();
-    toast('导入完成');
+    try {
+      await replaceWatchList(merged);
+      await load();
+      toast('导入完成');
+    } catch (e) {
+      toast('导入保存失败：' + (e && e.message ? e.message : String(e)));
+    }
   }
 
   function exportJson() {
@@ -264,7 +241,7 @@ export function useAnimeTracker() {
       try {
         const data = JSON.parse(reader.result);
         if (!Array.isArray(data)) throw new Error('格式应为数组');
-        mergeImported(data.map(normalizeImport));
+        void mergeImported(data.map(normalizeImport));
       } catch {
         toast('导入失败：文件格式不对');
       }
@@ -272,12 +249,16 @@ export function useAnimeTracker() {
     reader.readAsText(file, 'UTF-8');
   }
 
-  function clearAll() {
+  async function clearAll() {
     if (!confirm('确定清空全部记录？此操作不可撤销（可先导出备份）。')) return;
-    entries.value = [];
-    save();
-    resetForm();
-    toast('已清空');
+    try {
+      await replaceWatchList([]);
+      await load();
+      resetForm();
+      toast('已清空');
+    } catch (e) {
+      toast('清空失败：' + (e && e.message ? e.message : String(e)));
+    }
   }
 
   onMounted(() => {

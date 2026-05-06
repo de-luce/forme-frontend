@@ -103,9 +103,9 @@ async function writeWorkbookXlsxReplace(wb, defaultFileName, year) {
 }
 
 /**
- * Excel 导入导出（依赖浏览器 File API / IndexedDB，与 UI 状态解耦）
+ * Excel 导入导出；导入完成后调用 syncFullYearAfterImport（按年整体 PUT）。
  */
-export function useWorkStatsExcel(year, data, save, viewRef) {
+export function useWorkStatsExcel(year, data, syncFullYearAfterImport, viewRef) {
   async function exportFullYearExcel() {
     const ws = XLSX.utils.aoa_to_sheet(buildExportRows(year, data));
     ws['!cols'] = [{ wch: 6 }, ...Array(12).fill({ wch: 10 })];
@@ -120,14 +120,14 @@ export function useWorkStatsExcel(year, data, save, viewRef) {
     ev.target.value = '';
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const buf = new Uint8Array(e.target.result);
         const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         applyImportMatrix(year, data, matrix, XLSX);
-        save();
+        await syncFullYearAfterImport();
         if (viewRef.value === 'year') {
           viewRef.value = 'month';
         }
