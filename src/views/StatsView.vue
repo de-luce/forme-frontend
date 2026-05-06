@@ -20,11 +20,11 @@
       </div>
     </header>
 
-    <div class="container">
-      <div v-show="view === 'month'" class="grid">
+    <div ref="containerRef" class="container">
+      <div v-show="view === 'month'" :key="'month-' + selectedMonth" class="grid">
         <div
           v-for="d in monthDaysList"
-          :key="d"
+          :key="selectedMonth + '-' + d"
           :id="'day-' + selectedMonth + '-' + d"
           class="day"
           :class="{ today: isTodayCell(selectedMonth, d) }"
@@ -55,305 +55,31 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import * as XLSX from 'xlsx-js-style';
-import { apiUrl, apiHeaders, getApiBase } from '../api/config.js';
-import {
-  daysInMonth,
-  parse,
+import { ref } from 'vue';
+import { useWorkStats } from '@/features/work-stats/composables/useWorkStats.js';
+
+const containerRef = ref(null);
+const {
+  selectedMonth,
+  view,
+  importInput,
   format,
-  formatSignedDiff,
-  normalize,
-  dayKey,
-  getMonthStats,
-  buildExportRows,
-  applyExportStyles,
-  applyImportMatrix,
-} from '../lib/workStatsCore.js';
-
-const YEAR = new Date().getFullYear();
-const TODAY = new Date();
-
-const data = reactive({});
-const selectedMonth = ref(TODAY.getMonth() + 1);
-const view = ref('month');
-const importInput = ref(null);
-
-let workSaveTimer = null;
-
-function cellVal(m, d) {
-  return data[dayKey(YEAR, m, d)] || '';
-}
-
-function loadLocalWork() {
-  try {
-    const raw = localStorage.getItem('work-' + YEAR);
-    const obj = raw ? JSON.parse(raw) : {};
-    Object.keys(data).forEach((k) => delete data[k]);
-    Object.assign(data, obj && typeof obj === 'object' ? obj : {});
-  } catch {
-    Object.keys(data).forEach((k) => delete data[k]);
-  }
-}
-
-async function loadWorkFromServer() {
-  if (!getApiBase()) {
-    loadLocalWork();
-    return;
-  }
-  try {
-    const r = await fetch(apiUrl('/api/work/' + YEAR), { headers: apiHeaders(false) });
-    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-    const obj = await r.json();
-    Object.keys(data).forEach((k) => delete data[k]);
-    Object.assign(data, obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : {});
-    localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-  } catch (e) {
-    console.error(e);
-    loadLocalWork();
-    alert('无法从服务器加载工时数据，已使用本地缓存');
-  }
-}
-
-async function flushWorkSave() {
-  try {
-    const r = await fetch(apiUrl('/api/work/' + YEAR), {
-      method: 'PUT',
-      headers: apiHeaders(true),
-      body: JSON.stringify(data),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-  } catch (e) {
-    console.error(e);
-    localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-    alert('保存到服务器失败（已写入本地缓存）');
-  }
-}
-
-function save() {
-  localStorage.setItem('work-' + YEAR, JSON.stringify({ ...data }));
-  if (!getApiBase()) return;
-  clearTimeout(workSaveTimer);
-  workSaveTimer = setTimeout(flushWorkSave, 500);
-}
-
-function onInput(m, d, val) {
-  const k = dayKey(YEAR, m, d);
-  if (val) data[k] = val;
-  else delete data[k];
-  save();
-}
-
-function onBlur(m, d, val) {
-  const n = normalize(val);
-  const k = dayKey(YEAR, m, d);
-  if (n) data[k] = n;
-  else delete data[k];
-  save();
-}
-
-const monthDaysList = computed(() => {
-  const m = selectedMonth.value;
-  const n = daysInMonth(YEAR, m);
-  return Array.from({ length: n }, (_, i) => i + 1);
-});
-
-const monthTotal = computed(() => getMonthStats(YEAR, data, selectedMonth.value).total);
-
-const monthLeaveText = computed(() =>
-  monthTotal.value > 0 ? `可提前下班 ${format(monthTotal.value)}` : `需补 ${format(monthTotal.value)}`
-);
-
-function isTodayCell(m, d) {
-  return m === TODAY.getMonth() + 1 && d === TODAY.getDate();
-}
-
-function diffLabel(m, d) {
-  const v = data[dayKey(YEAR, m, d)];
-  const p = parse(v);
-  if (p == null) return '';
-  const diff = p - STANDARD;
-  return formatSignedDiff(diff);
-}
-
-function diffClass(m, d) {
-  const v = data[dayKey(YEAR, m, d)];
-  const p = parse(v);
-  if (p == null) return '';
-  const diff = p - STANDARD;
-  return diff >= 0 ? 'pos' : 'neg';
-}
-
-function yearDiffText(m) {
-  const { total, hasData } = getMonthStats(YEAR, data, m);
-  return hasData ? format(total) : '—';
-}
-
-function yearDiffClass(m) {
-  const { hasData } = getMonthStats(YEAR, data, m);
-  return hasData ? 'pos' : 'year-no-data';
-}
-
-function switchView(v) {
-  if (v === 'month') {
-    selectedMonth.value = TODAY.getMonth() + 1;
-    view.value = 'month';
-    nextTick(() => scrollToTodayCell());
-  } else {
-    view.value = 'year';
-  }
-}
-
-function onMonthChange() {
-  nextTick(() => scrollToTodayCell());
-}
-
-function scrollToTodayCell() {
-  const m = TODAY.getMonth() + 1;
-  const d = TODAY.getDate();
-  if (selectedMonth.value !== m) return;
-  const el = document.getElementById(`day-${m}-${d}`);
-  if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  const inp = el.querySelector('input');
-  if (inp) inp.focus({ preventScroll: true });
-}
-
-const EXPORT_IDB_NAME = 'ForMeWorkHours';
-const EXPORT_IDB_STORE = 'excelExportHandle';
-const EXPORT_IDB_VER = 1;
-
-function idbOpenExport() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(EXPORT_IDB_NAME, EXPORT_IDB_VER);
-    req.onerror = () => reject(req.error);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(EXPORT_IDB_STORE)) {
-        db.createObjectStore(EXPORT_IDB_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-  });
-}
-
-async function idbAccess(mode, cb) {
-  const db = await idbOpenExport();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(EXPORT_IDB_STORE, mode);
-    const store = tx.objectStore(EXPORT_IDB_STORE);
-    let result;
-    tx.onerror = () => reject(tx.error);
-    tx.oncomplete = () => resolve(result);
-    cb(store, (v) => {
-      result = v;
-    }, reject);
-  });
-}
-
-function idbPutExportHandle(key, handle) {
-  return idbAccess('readwrite', (store) => {
-    store.put(handle, key);
-  });
-}
-
-function idbGetExportHandle(key) {
-  return idbAccess('readonly', (store, setResult, reject) => {
-    const q = store.get(key);
-    q.onsuccess = () => setResult(q.result);
-    q.onerror = () => reject(q.error);
-  });
-}
-
-async function writeWorkbookXlsxReplace(wb, defaultFileName) {
-  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const idbKey = 'xlsx-export-' + YEAR;
-
-  const writeToHandle = async (fileHandle) => {
-    const writable = await fileHandle.createWritable();
-    await writable.write(buf);
-    await writable.close();
-  };
-
-  if (!window.showSaveFilePicker) {
-    XLSX.writeFile(wb, defaultFileName);
-    return;
-  }
-
-  let saved = null;
-  try {
-    saved = await idbGetExportHandle(idbKey);
-  } catch (_) {}
-
-  if (saved && typeof saved.createWritable === 'function') {
-    try {
-      let ok = (await saved.queryPermission({ mode: 'readwrite' })) === 'granted';
-      if (!ok) ok = (await saved.requestPermission({ mode: 'readwrite' })) === 'granted';
-      if (ok) {
-        await writeToHandle(saved);
-        return;
-      }
-    } catch (_) {}
-  }
-
-  try {
-    const fileHandle = await window.showSaveFilePicker({
-      suggestedName: defaultFileName,
-      types: [
-        {
-          description: 'Excel 工作簿',
-          accept: {
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-          },
-        },
-      ],
-    });
-    await writeToHandle(fileHandle);
-    await idbPutExportHandle(idbKey, fileHandle);
-  } catch (e) {
-    if (e && e.name === 'AbortError') return;
-    XLSX.writeFile(wb, defaultFileName);
-  }
-}
-
-async function exportFullYearExcel() {
-  const ws = XLSX.utils.aoa_to_sheet(buildExportRows(YEAR, data));
-  ws['!cols'] = [{ wch: 6 }, ...Array(12).fill({ wch: 10 })];
-  applyExportStyles(ws, YEAR, XLSX);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, String(YEAR));
-  await writeWorkbookXlsxReplace(wb, `工时-${YEAR}-全日.xlsx`);
-}
-
-function importFromExcel(ev) {
-  const f = ev.target.files && ev.target.files[0];
-  ev.target.value = '';
-  if (!f) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const buf = new Uint8Array(e.target.result);
-      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
-      applyImportMatrix(YEAR, data, matrix, XLSX);
-      save();
-      if (view.value === 'year') {
-        view.value = 'month';
-      }
-    } catch (err) {
-      alert('导入失败：' + (err && err.message ? err.message : String(err)));
-    }
-  };
-  reader.readAsArrayBuffer(f);
-}
-
-onMounted(async () => {
-  await loadWorkFromServer();
-  await nextTick();
-  scrollToTodayCell();
-});
+  cellVal,
+  onInput,
+  onBlur,
+  monthDaysList,
+  monthTotal,
+  monthLeaveText,
+  isTodayCell,
+  diffLabel,
+  diffClass,
+  yearDiffText,
+  yearDiffClass,
+  switchView,
+  onMonthChange,
+  exportFullYearExcel,
+  importFromExcel,
+} = useWorkStats(containerRef);
 </script>
 
 <style scoped>
