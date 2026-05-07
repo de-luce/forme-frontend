@@ -1,0 +1,27 @@
+# —— Frontend (Vue / Vite) ——
+node_modules/
+dist/
+.env
+.env.local
+*.local
+
+# —— IDEs & editors ——
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+.idea/
+*.iws
+*.iml
+*.ipr
+/nbproject/private/
+/nbbuild/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+.vscode/
