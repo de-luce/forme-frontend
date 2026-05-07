@@ -5,6 +5,9 @@ dist/
 .env.local
 *.local
 
+# —— lock files (do not commit) ——
+package-lock.json
+
 # —— IDEs & editors ——
 .apt_generated
 .classpath
