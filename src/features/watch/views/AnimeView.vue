@@ -20,10 +20,8 @@
     <main>
       <div class="stats">
         <span class="stat-pill">共 <strong>{{ entries.length }}</strong> 部</span>
-        <span class="stat-pill">想看 <strong>{{ counts.planned }}</strong></span>
         <span class="stat-pill">追番中 <strong>{{ counts.watching }}</strong></span>
         <span class="stat-pill">已看完 <strong>{{ counts.done }}</strong></span>
-        <span class="stat-pill">搁置 <strong>{{ counts.hold }}</strong></span>
         <span v-if="filterStatus || search.trim()" class="stat-pill">当前显示 <strong>{{ filtered.length }}</strong> 部</span>
       </div>
 
@@ -31,10 +29,8 @@
         <label for="filter-status">状态</label>
         <select id="filter-status" v-model="filterStatus">
           <option value="">全部</option>
-          <option value="planned">想看</option>
           <option value="watching">追番中</option>
           <option value="done">已看完</option>
-          <option value="hold">搁置</option>
         </select>
         <div class="search-wrap">
           <input v-model="search" type="search" placeholder="搜索标题…" autocomplete="off" />
@@ -50,25 +46,8 @@
               <input id="title" v-model.trim="form.title" required maxlength="200" placeholder="作品名称" />
             </div>
             <div class="field">
-              <label for="status">状态</label>
-              <select id="status" v-model="form.status">
-                <option value="planned">想看</option>
-                <option value="watching">追番中</option>
-                <option value="done">已看完</option>
-                <option value="hold">搁置</option>
-              </select>
-            </div>
-            <div class="field">
               <label for="currentEp">当前看到</label>
               <input id="currentEp" v-model.number="form.currentEp" type="number" min="0" step="1" placeholder="0" />
-            </div>
-            <div class="field">
-              <label for="totalEp">总集数（可选）</label>
-              <input id="totalEp" v-model.number="form.totalEp" type="number" min="0" step="1" placeholder="留空表示未知" />
-            </div>
-            <div class="field span-2">
-              <label for="url">链接（可选）</label>
-              <input id="url" v-model.trim="form.url" type="url" placeholder="Bangumi / B站 / 任意网址" />
             </div>
           </div>
           <div class="form-actions">
@@ -84,20 +63,37 @@
           <p v-if="sortedFiltered.length === 0" class="empty">暂无条目，先在上方添加一部作品吧。</p>
           <article v-for="e in sortedFiltered" :key="e.id" class="card">
             <div class="card-main">
-              <h3>{{ e.title }}</h3>
+              <h3
+                class="title-copy"
+                :title="'点击复制：' + (e.title || '')"
+                role="button"
+                tabindex="0"
+                @click="copyTitle(e.title)"
+                @keydown.enter.prevent="copyTitle(e.title)"
+                @keydown.space.prevent="copyTitle(e.title)"
+              >
+                {{ e.title }}
+              </h3>
               <div class="meta">
-                <span class="badge" :class="statusClass[e.status] || 'planned'">{{ statusLabel[e.status] || e.status }}</span>
+                <label class="status-wrap">
+                  <span class="sr-only">修改状态</span>
+                  <select
+                    class="badge-select"
+                    :class="statusClass[normalizeStatus(e.status)]"
+                    :value="normalizeStatus(e.status)"
+                    @change="setEntryStatus(e, $event.target.value)"
+                  >
+                    <option value="watching">追番中</option>
+                    <option value="done">已看完</option>
+                  </select>
+                </label>
               </div>
               <div class="progress-line">
                 <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
-                <template v-if="e.totalEp != null"> / 共 {{ e.totalEp }} 话</template>
-              </div>
-              <div v-if="e.url" class="link-row">
-                <a :href="e.url" target="_blank" rel="noopener noreferrer">打开链接</a>
               </div>
             </div>
             <div class="card-actions">
-              <button type="button" @click="epPlus(e)">+1 话</button>
+              <button v-if="normalizeStatus(e.status) !== 'done'" type="button" @click="epPlus(e)">+1 话</button>
               <button type="button" @click="startEdit(e)">编辑</button>
               <button type="button" class="danger" @click="remove(e.id)">删除</button>
             </div>
@@ -111,7 +107,7 @@
 </template>
 
 <script setup>
-import { statusLabel, statusClass, useAnimeTracker } from '@/features/anime/composables/useAnimeTracker.js';
+import { statusClass, useWatchTracker } from '@/features/watch/composables/useWatchTracker.js';
 
 const {
   entries,
@@ -123,20 +119,36 @@ const {
   toastMsg,
   toastShow,
   sortedFiltered,
+  filtered,
   counts,
+  normalizeStatus,
   submitForm,
   cancelEdit,
   epPlus,
   startEdit,
+  setEntryStatus,
+  copyTitle,
   remove,
   exportJson,
   triggerImport,
   onImportFile,
   clearAll,
-} = useAnimeTracker();
+} = useWatchTracker();
 </script>
 
 <style scoped>
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .anime-page {
   min-height: 100vh;
   background: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(168, 85, 247, 0.12), transparent), var(--bg);
@@ -379,9 +391,25 @@ select {
   }
 }
 
-.card-main h3 {
+.title-copy {
   margin: 0 0 6px;
   font-size: 1rem;
+  cursor: copy;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin-left: -4px;
+  transition: background 0.15s;
+}
+
+.title-copy:hover {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.title-copy:focus-visible {
+  outline: 2px solid #a855f7;
+  outline-offset: 2px;
 }
 
 .meta {
@@ -390,29 +418,39 @@ select {
   gap: 8px;
 }
 
-.badge {
+.status-wrap {
+  margin: 0;
   display: inline-flex;
-  padding: 2px 8px;
+}
+
+.badge-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 4px 28px 4px 10px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M3 4.5L6 8l3-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
-.badge.planned {
-  background: rgba(56, 189, 248, 0.15);
-  color: #7dd3fc;
-}
-.badge.watching {
-  background: rgba(34, 197, 94, 0.15);
+.badge-select.watching {
+  background-color: rgba(34, 197, 94, 0.15);
   color: #86efac;
+  border-color: rgba(34, 197, 94, 0.35);
 }
-.badge.done {
-  background: rgba(100, 116, 139, 0.25);
+
+.badge-select.done {
+  background-color: rgba(100, 116, 139, 0.25);
   color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.35);
 }
-.badge.hold {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fcd34d;
+
+.badge-select:hover {
+  filter: brightness(1.08);
 }
 
 .progress-line {
@@ -423,15 +461,6 @@ select {
 .ep {
   color: #a855f7;
   font-weight: 600;
-}
-
-.link-row {
-  margin-top: 6px;
-}
-
-.link-row a {
-  color: #a855f7;
-  font-size: 13px;
 }
 
 .card-actions {

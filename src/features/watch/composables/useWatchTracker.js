@@ -5,27 +5,23 @@ import {
   fetchWatchList,
   replaceWatchList,
   updateWatchEntry,
-} from '@/api/watchList.js';
+} from '@/features/watch/api/watchApi.js';
 
 export const EXPORT_FILENAME = '追番数据.json';
 
-export const statusLabel = {
-  planned: '想看',
-  watching: '追番中',
-  done: '已看完',
-  hold: '搁置',
-};
-
+/** 仅支持：追番中、已看完；历史 planned/hold 在展示与保存时归入追番中 */
 export const statusClass = {
-  planned: 'planned',
   watching: 'watching',
   done: 'done',
-  hold: 'hold',
 };
+
+export function normalizeStatus(s) {
+  return s === 'done' ? 'done' : 'watching';
+}
 
 function stripLegacyFields(e) {
   if (!e || typeof e !== 'object') return e;
-  const { season, notes, ...rest } = e;
+  const { season, notes, url, totalEp, ...rest } = e;
   return rest;
 }
 
@@ -36,7 +32,7 @@ function uid() {
 /**
  * 追番：CRUD 接口 + 全量 replace（清空/合并导入）。
  */
-export function useAnimeTracker() {
+export function useWatchTracker() {
   const entries = ref([]);
   const editingId = ref(null);
   const filterStatus = ref('');
@@ -45,10 +41,7 @@ export function useAnimeTracker() {
 
   const form = reactive({
     title: '',
-    status: 'watching',
     currentEp: undefined,
-    totalEp: undefined,
-    url: '',
   });
 
   const toastMsg = ref('');
@@ -67,7 +60,12 @@ export function useAnimeTracker() {
   async function load() {
     try {
       const data = await fetchWatchList();
-      entries.value = Array.isArray(data) ? data.map(stripLegacyFields) : [];
+      entries.value = Array.isArray(data)
+        ? data.map((row) => {
+            const x = stripLegacyFields(row);
+            return { ...x, status: normalizeStatus(x.status) };
+          })
+        : [];
     } catch (e) {
       console.error(e);
       entries.value = [];
@@ -79,43 +77,44 @@ export function useAnimeTracker() {
     const st = filterStatus.value;
     const q = search.value.trim().toLowerCase();
     return entries.value.filter((e) => {
-      if (st && e.status !== st) return false;
+      const ns = normalizeStatus(e.status);
+      if (st && ns !== st) return false;
       if (!q) return true;
       return (e.title || '').toLowerCase().includes(q);
     });
   });
 
-  const sortOrder = { watching: 0, planned: 1, hold: 2, done: 3 };
+  const sortOrder = { watching: 0, done: 1 };
 
   const sortedFiltered = computed(() =>
     [...filtered.value].sort((a, b) => {
-      const os = (sortOrder[a.status] ?? 9) - (sortOrder[b.status] ?? 9);
+      const os =
+        (sortOrder[normalizeStatus(a.status)] ?? 9) - (sortOrder[normalizeStatus(b.status)] ?? 9);
       if (os !== 0) return os;
       return (b.updatedAt || 0) - (a.updatedAt || 0);
     })
   );
 
   const counts = computed(() => {
-    const c = { planned: 0, watching: 0, done: 0, hold: 0 };
+    const c = { watching: 0, done: 0 };
     entries.value.forEach((e) => {
-      if (c[e.status] !== undefined) c[e.status]++;
+      if (normalizeStatus(e.status) === 'done') c.done++;
+      else c.watching++;
     });
     return c;
   });
 
   function parseOptionalInt(value) {
     if (value === '' || value == null) return null;
-    const n = parseInt(value, 10);
+    if (typeof value === 'number' && !Number.isFinite(value)) return null;
+    const n = parseInt(String(value).trim(), 10);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
 
   function resetForm() {
     editingId.value = null;
     form.title = '';
-    form.status = 'watching';
     form.currentEp = undefined;
-    form.totalEp = undefined;
-    form.url = '';
   }
 
   async function submitForm() {
@@ -125,10 +124,7 @@ export function useAnimeTracker() {
     }
     const row = {
       title: form.title.trim(),
-      status: form.status,
       currentEp: parseOptionalInt(form.currentEp) ?? 0,
-      totalEp: parseOptionalInt(form.totalEp),
-      url: form.url.trim() || '',
       updatedAt: Date.now(),
     };
     try {
@@ -138,7 +134,9 @@ export function useAnimeTracker() {
         await updateWatchEntry(editingId.value, merged);
         toast('已更新');
       } else {
-        await createWatchEntry(stripLegacyFields({ id: uid(), ...row }));
+        await createWatchEntry(
+          stripLegacyFields({ id: uid(), status: 'watching', ...row })
+        );
         toast('已添加');
       }
       await load();
@@ -153,11 +151,16 @@ export function useAnimeTracker() {
   }
 
   async function epPlus(item) {
-    item.currentEp = (item.currentEp ?? 0) + 1;
-    if (item.totalEp != null && item.currentEp > item.totalEp) item.currentEp = item.totalEp;
-    item.updatedAt = Date.now();
+    const nextEp = (item.currentEp ?? 0) + 1;
     try {
-      await updateWatchEntry(item.id, stripLegacyFields({ ...item }));
+      await updateWatchEntry(
+        item.id,
+        stripLegacyFields({
+          ...item,
+          currentEp: nextEp,
+          status: normalizeStatus(item.status),
+        })
+      );
       toast('进度 +1');
       await load();
     } catch (e) {
@@ -168,11 +171,41 @@ export function useAnimeTracker() {
   function startEdit(item) {
     editingId.value = item.id;
     form.title = item.title;
-    form.status = item.status;
     form.currentEp = item.currentEp != null ? item.currentEp : undefined;
-    form.totalEp = item.totalEp != null ? item.totalEp : undefined;
-    form.url = item.url || '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function setEntryStatus(entry, newStatus) {
+    const next = normalizeStatus(newStatus);
+    if (normalizeStatus(entry.status) === next) return;
+    try {
+      await updateWatchEntry(
+        entry.id,
+        stripLegacyFields({
+          ...entry,
+          status: next,
+          updatedAt: Date.now(),
+        })
+      );
+      toast('状态已更新');
+      await load();
+    } catch (e) {
+      toast('状态保存失败：' + (e && e.message ? e.message : String(e)));
+    }
+  }
+
+  async function copyTitle(text) {
+    const t = (text || '').trim();
+    if (!t) {
+      toast('无标题可复制');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(t);
+      toast('已复制标题');
+    } catch {
+      toast('复制失败（浏览器权限）');
+    }
   }
 
   async function remove(id) {
@@ -191,10 +224,8 @@ export function useAnimeTracker() {
     return stripLegacyFields({
       id: x.id && typeof x.id === 'string' ? x.id : uid(),
       title: String(x.title || '').trim() || '未命名',
-      status: ['planned', 'watching', 'done', 'hold'].includes(x.status) ? x.status : 'watching',
+      status: normalizeStatus(x.status),
       currentEp: typeof x.currentEp === 'number' && x.currentEp >= 0 ? x.currentEp : 0,
-      totalEp: typeof x.totalEp === 'number' && x.totalEp >= 0 ? x.totalEp : null,
-      url: String(x.url || '').trim(),
       updatedAt: typeof x.updatedAt === 'number' ? x.updatedAt : Date.now(),
     });
   }
@@ -277,10 +308,13 @@ export function useAnimeTracker() {
     filtered,
     sortedFiltered,
     counts,
+    normalizeStatus,
     submitForm,
     cancelEdit,
     epPlus,
     startEdit,
+    setEntryStatus,
+    copyTitle,
     remove,
     exportJson,
     triggerImport,

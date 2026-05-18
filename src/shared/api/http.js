@@ -43,14 +43,6 @@ async function formatHttpError(status, text) {
   return `${status} ${text?.slice(0, 200) || ''}`.trim();
 }
 
-async function readBodyAfterFetch(r) {
-  const text = await r.text();
-  return { text, ok: r.ok, status: r.status };
-}
-
-/**
- * GET JSON：无论 HTTP 是否 200，只要正文是 HTML 都会给出明确提示（避免 “Unexpected token '<'”）。
- */
 export async function getJson(path) {
   const url = apiUrl(path);
   const r = await fetch(url, { headers: apiHeaders(false) });
@@ -77,7 +69,6 @@ export async function putJson(path, body) {
   }
 }
 
-/** POST JSON，解析响应 JSON（201 等） */
 export async function postJson(path, body) {
   const url = apiUrl(path);
   const r = await fetch(url, {

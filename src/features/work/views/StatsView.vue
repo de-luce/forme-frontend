@@ -59,7 +59,7 @@
 
 <script setup>
 import { ref } from 'vue';
-import { useWorkStats } from '@/features/work-stats/composables/useWorkStats.js';
+import { useWorkStats } from '@/features/work/composables/useWorkStats.js';
 
 const containerRef = ref(null);
 const {

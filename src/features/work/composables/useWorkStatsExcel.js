@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import { buildExportRows, applyExportStyles, applyImportMatrix } from '@/domain/work-stats/workStatsCore.js';
+import { buildExportRows, applyExportStyles, applyImportMatrix } from '@/features/work/domain/workStatsCore.js';
 
 const EXPORT_IDB_NAME = 'ForMeWorkHours';
 const EXPORT_IDB_STORE = 'excelExportHandle';

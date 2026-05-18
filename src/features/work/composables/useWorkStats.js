@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { fetchWorkYear, putWorkDay, saveWorkYear } from '@/api/workYear.js';
+import { fetchWorkYear, putWorkDay, saveWorkYear } from '@/features/work/api/workApi.js';
 import {
   STANDARD,
   daysInMonth,
@@ -9,7 +9,7 @@ import {
   normalize,
   dayKey,
   getMonthStats,
-} from '@/domain/work-stats/workStatsCore.js';
+} from '@/features/work/domain/workStatsCore.js';
 import { useWorkStatsExcel } from './useWorkStatsExcel.js';
 
 const YEAR = new Date().getFullYear();
