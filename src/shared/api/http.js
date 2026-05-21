@@ -43,9 +43,27 @@ async function formatHttpError(status, text) {
   return `${status} ${text?.slice(0, 200) || ''}`.trim();
 }
 
+function wrapFetchError(e, method, url) {
+  if (e instanceof TypeError && String(e.message).includes('Failed to fetch')) {
+    throw new Error(
+      [
+        '无法连接后端 API（Failed to fetch），通常不是数据库报错。',
+        '请确认：① Spring Boot 已在 8787 运行；② VITE_API_BASE 指向可访问的后端；③ 未用 HTTPS 页面请求 HTTP API。',
+        `请求: ${method} ${url}`,
+      ].join(' ')
+    );
+  }
+  throw e;
+}
+
 export async function getJson(path) {
   const url = apiUrl(path);
-  const r = await fetch(url, { headers: apiHeaders(false) });
+  let r;
+  try {
+    r = await fetch(url, { headers: apiHeaders(false) });
+  } catch (e) {
+    wrapFetchError(e, 'GET', url);
+  }
   const text = await r.text();
   if (!r.ok) {
     throw new Error(await formatHttpError(r.status, text));
@@ -55,11 +73,16 @@ export async function getJson(path) {
 
 export async function putJson(path, body) {
   const url = apiUrl(path);
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: apiHeaders(true),
-    body: JSON.stringify(body),
-  });
+  let r;
+  try {
+    r = await fetch(url, {
+      method: 'PUT',
+      headers: apiHeaders(true),
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    wrapFetchError(e, 'PUT', url);
+  }
   const text = await r.text();
   if (!r.ok) {
     throw new Error(await formatHttpError(r.status, text));
@@ -71,11 +94,16 @@ export async function putJson(path, body) {
 
 export async function postJson(path, body) {
   const url = apiUrl(path);
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: apiHeaders(true),
-    body: JSON.stringify(body),
-  });
+  let r;
+  try {
+    r = await fetch(url, {
+      method: 'POST',
+      headers: apiHeaders(true),
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    wrapFetchError(e, 'POST', url);
+  }
   const text = await r.text();
   if (!r.ok) {
     throw new Error(await formatHttpError(r.status, text));
@@ -92,10 +120,15 @@ export async function postJson(path, body) {
 
 export async function deleteJson(path) {
   const url = apiUrl(path);
-  const r = await fetch(url, {
-    method: 'DELETE',
-    headers: apiHeaders(false),
-  });
+  let r;
+  try {
+    r = await fetch(url, {
+      method: 'DELETE',
+      headers: apiHeaders(false),
+    });
+  } catch (e) {
+    wrapFetchError(e, 'DELETE', url);
+  }
   const text = await r.text();
   if (!r.ok) {
     throw new Error(await formatHttpError(r.status, text));
