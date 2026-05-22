@@ -48,7 +48,7 @@ function wrapFetchError(e, method, url) {
     throw new Error(
       [
         '无法连接后端 API（Failed to fetch），通常不是数据库报错。',
-        '请确认：① Spring Boot 已在 8787 运行；② VITE_API_BASE 指向可访问的后端；③ 未用 HTTPS 页面请求 HTTP API。',
+        '请确认：① Spring Boot 已在 8787 运行；② VITE_API_BASE 须为浏览器能访问的地址（生产环境勿用 127.0.0.1，除非页面也在同一台机器打开）；③ 未用 HTTPS 页面请求 HTTP API。',
         `请求: ${method} ${url}`,
       ].join(' ')
     );
