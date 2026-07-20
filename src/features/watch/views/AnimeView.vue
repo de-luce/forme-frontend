@@ -59,45 +59,128 @@
 
       <section class="panel">
         <h2>列表</h2>
+        <p v-if="!canReorder" class="reorder-hint">筛选或搜索时不可拖动排序；切回「全部」并清空搜索后可拖动整行调整顺序。</p>
+        <p v-else class="reorder-hint">拖动整行可在同状态内调整顺序（按钮与状态下拉仍可正常点击）。</p>
         <div class="list">
           <p v-if="sortedFiltered.length === 0" class="empty">暂无条目，先在上方添加一部作品吧。</p>
-          <article v-for="e in sortedFiltered" :key="e.id" class="card">
-            <div class="card-main">
-              <h3
-                class="title-copy"
-                :title="'点击复制：' + (e.title || '')"
-                role="button"
-                tabindex="0"
-                @click="copyTitle(e.title)"
-                @keydown.enter.prevent="copyTitle(e.title)"
-                @keydown.space.prevent="copyTitle(e.title)"
+          <template v-else>
+            <div v-if="watchingList.length" class="status-section">
+              <h3 class="status-heading">追番中 <span>{{ watchingList.length }}</span></h3>
+              <VueDraggable
+                class="drag-group"
+                :model-value="watchingList"
+                :disabled="!canReorder"
+                :filter="dragFilter"
+                :prevent-on-filter="true"
+                animation="200"
+                ghost-class="card-ghost"
+                chosen-class="card-chosen"
+                :class="{ 'is-reorderable': canReorder }"
+                @update:model-value="onWatchingReorder"
               >
-                {{ e.title }}
-              </h3>
-              <div class="meta">
-                <label class="status-wrap">
-                  <span class="sr-only">修改状态</span>
-                  <select
-                    class="badge-select"
-                    :class="statusClass[normalizeStatus(e.status)]"
-                    :value="normalizeStatus(e.status)"
-                    @change="setEntryStatus(e, $event.target.value)"
-                  >
-                    <option value="watching">追番中</option>
-                    <option value="done">已看完</option>
-                  </select>
-                </label>
-              </div>
-              <div class="progress-line">
-                <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
-              </div>
+                <article
+                  v-for="e in watchingList"
+                  :key="e.id"
+                  class="card"
+                  :class="{ 'card-draggable': canReorder }"
+                >
+                  <div class="card-main">
+                    <h3
+                      class="title-copy no-drag"
+                      :title="'点击复制：' + (e.title || '')"
+                      role="button"
+                      tabindex="0"
+                      @click="copyTitle(e.title)"
+                      @keydown.enter.prevent="copyTitle(e.title)"
+                      @keydown.space.prevent="copyTitle(e.title)"
+                    >
+                      {{ e.title }}
+                    </h3>
+                    <div class="meta">
+                      <label class="status-wrap no-drag">
+                        <span class="sr-only">修改状态</span>
+                        <select
+                          class="badge-select"
+                          :class="statusClass[normalizeStatus(e.status)]"
+                          :value="normalizeStatus(e.status)"
+                          @change="setEntryStatus(e, $event.target.value)"
+                        >
+                          <option value="watching">追番中</option>
+                          <option value="done">已看完</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="progress-line">
+                      <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
+                    </div>
+                  </div>
+                  <div class="card-actions no-drag">
+                    <button type="button" @click="epPlus(e)">+1 话</button>
+                    <button type="button" @click="startEdit(e)">编辑</button>
+                    <button type="button" class="danger" @click="remove(e.id)">删除</button>
+                  </div>
+                </article>
+              </VueDraggable>
             </div>
-            <div class="card-actions">
-              <button v-if="normalizeStatus(e.status) !== 'done'" type="button" @click="epPlus(e)">+1 话</button>
-              <button type="button" @click="startEdit(e)">编辑</button>
-              <button type="button" class="danger" @click="remove(e.id)">删除</button>
+
+            <div v-if="doneList.length" class="status-section">
+              <h3 class="status-heading">已看完 <span>{{ doneList.length }}</span></h3>
+              <VueDraggable
+                class="drag-group"
+                :model-value="doneList"
+                :disabled="!canReorder"
+                :filter="dragFilter"
+                :prevent-on-filter="true"
+                animation="200"
+                ghost-class="card-ghost"
+                chosen-class="card-chosen"
+                :class="{ 'is-reorderable': canReorder }"
+                @update:model-value="onDoneReorder"
+              >
+                <article
+                  v-for="e in doneList"
+                  :key="e.id"
+                  class="card"
+                  :class="{ 'card-draggable': canReorder }"
+                >
+                  <div class="card-main">
+                    <h3
+                      class="title-copy no-drag"
+                      :title="'点击复制：' + (e.title || '')"
+                      role="button"
+                      tabindex="0"
+                      @click="copyTitle(e.title)"
+                      @keydown.enter.prevent="copyTitle(e.title)"
+                      @keydown.space.prevent="copyTitle(e.title)"
+                    >
+                      {{ e.title }}
+                    </h3>
+                    <div class="meta">
+                      <label class="status-wrap no-drag">
+                        <span class="sr-only">修改状态</span>
+                        <select
+                          class="badge-select"
+                          :class="statusClass[normalizeStatus(e.status)]"
+                          :value="normalizeStatus(e.status)"
+                          @change="setEntryStatus(e, $event.target.value)"
+                        >
+                          <option value="watching">追番中</option>
+                          <option value="done">已看完</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="progress-line">
+                      <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
+                    </div>
+                  </div>
+                  <div class="card-actions no-drag">
+                    <button type="button" @click="startEdit(e)">编辑</button>
+                    <button type="button" class="danger" @click="remove(e.id)">删除</button>
+                  </div>
+                </article>
+              </VueDraggable>
             </div>
-          </article>
+          </template>
         </div>
       </section>
     </main>
@@ -107,7 +190,11 @@
 </template>
 
 <script setup>
+import { VueDraggable } from 'vue-draggable-plus';
 import { statusClass, useWatchTracker } from '@/features/watch/composables/useWatchTracker.js';
+
+/** 交互控件不触发整行拖动 */
+const dragFilter = '.no-drag, .no-drag *';
 
 const {
   entries,
@@ -118,7 +205,10 @@ const {
   form,
   toastMsg,
   toastShow,
+  canReorder,
   sortedFiltered,
+  watchingList,
+  doneList,
   filtered,
   counts,
   normalizeStatus,
@@ -127,6 +217,8 @@ const {
   epPlus,
   startEdit,
   setEntryStatus,
+  onWatchingReorder,
+  onDoneReorder,
   copyTitle,
   remove,
   exportJson,
@@ -368,10 +460,55 @@ select {
   margin-top: 14px;
 }
 
+.reorder-hint {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .list {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+}
+
+.status-section {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--grid);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.status-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.status-heading span {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.drag-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drag-group.is-reorderable .card-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag-group.is-reorderable .card-draggable:active {
+  cursor: grabbing;
 }
 
 .card {
@@ -385,9 +522,22 @@ select {
   align-items: start;
 }
 
+.card-ghost {
+  opacity: 0.45;
+}
+
+.card-chosen {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-color: #a855f7;
+}
+
 @media (max-width: 560px) {
   .card {
     grid-template-columns: 1fr;
+  }
+
+  .card-actions {
+    justify-content: flex-start;
   }
 }
 

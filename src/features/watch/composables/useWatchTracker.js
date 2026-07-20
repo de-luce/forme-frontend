@@ -29,6 +29,12 @@ function uid() {
   return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
 }
 
+function normalizeSortOrder(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const n = parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /**
  * 追番：CRUD 接口 + 全量 replace（清空/合并导入）。
  */
@@ -57,14 +63,46 @@ export function useWatchTracker() {
     }, 2200);
   }
 
+  /** 同 status 内按 sortOrder；若全为 0 则按 updatedAt 降序回填一次内存顺序 */
+  function ensureSortOrders(list) {
+    const byStatus = { watching: [], done: [] };
+    list.forEach((e) => {
+      const ns = normalizeStatus(e.status);
+      byStatus[ns].push(e);
+    });
+    for (const status of ['watching', 'done']) {
+      const group = byStatus[status];
+      const allZero = group.every((e) => normalizeSortOrder(e.sortOrder) === 0);
+      if (allZero && group.length > 1) {
+        group
+          .slice()
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+          .forEach((e, i) => {
+            e.sortOrder = i;
+          });
+      } else {
+        group.forEach((e) => {
+          e.sortOrder = normalizeSortOrder(e.sortOrder);
+        });
+      }
+    }
+    return list;
+  }
+
   async function load() {
     try {
       const data = await fetchWatchList();
       entries.value = Array.isArray(data)
-        ? data.map((row) => {
-            const x = stripLegacyFields(row);
-            return { ...x, status: normalizeStatus(x.status) };
-          })
+        ? ensureSortOrders(
+            data.map((row) => {
+              const x = stripLegacyFields(row);
+              return {
+                ...x,
+                status: normalizeStatus(x.status),
+                sortOrder: normalizeSortOrder(x.sortOrder),
+              };
+            })
+          )
         : [];
     } catch (e) {
       console.error(e);
@@ -72,6 +110,8 @@ export function useWatchTracker() {
       toast('无法从服务器加载：' + (e && e.message ? e.message : String(e)));
     }
   }
+
+  const canReorder = computed(() => !filterStatus.value && !search.value.trim());
 
   const filtered = computed(() => {
     const st = filterStatus.value;
@@ -84,15 +124,25 @@ export function useWatchTracker() {
     });
   });
 
-  const sortOrder = { watching: 0, done: 1 };
+  const statusRank = { watching: 0, done: 1 };
 
   const sortedFiltered = computed(() =>
     [...filtered.value].sort((a, b) => {
       const os =
-        (sortOrder[normalizeStatus(a.status)] ?? 9) - (sortOrder[normalizeStatus(b.status)] ?? 9);
+        (statusRank[normalizeStatus(a.status)] ?? 9) - (statusRank[normalizeStatus(b.status)] ?? 9);
       if (os !== 0) return os;
+      const so = normalizeSortOrder(a.sortOrder) - normalizeSortOrder(b.sortOrder);
+      if (so !== 0) return so;
       return (b.updatedAt || 0) - (a.updatedAt || 0);
     })
+  );
+
+  const watchingList = computed(() =>
+    sortedFiltered.value.filter((e) => normalizeStatus(e.status) === 'watching')
+  );
+
+  const doneList = computed(() =>
+    sortedFiltered.value.filter((e) => normalizeStatus(e.status) === 'done')
   );
 
   const counts = computed(() => {
@@ -109,6 +159,12 @@ export function useWatchTracker() {
     if (typeof value === 'number' && !Number.isFinite(value)) return null;
     const n = parseInt(String(value).trim(), 10);
     return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  function topSortOrder(status) {
+    const group = entries.value.filter((e) => normalizeStatus(e.status) === status);
+    if (!group.length) return 0;
+    return Math.min(...group.map((e) => normalizeSortOrder(e.sortOrder))) - 1;
   }
 
   function resetForm() {
@@ -130,12 +186,22 @@ export function useWatchTracker() {
     try {
       if (editingId.value) {
         const prev = entries.value.find((x) => x.id === editingId.value);
-        const merged = stripLegacyFields({ ...prev, ...row, id: editingId.value });
+        const merged = stripLegacyFields({
+          ...prev,
+          ...row,
+          id: editingId.value,
+          sortOrder: normalizeSortOrder(prev?.sortOrder),
+        });
         await updateWatchEntry(editingId.value, merged);
         toast('已更新');
       } else {
         await createWatchEntry(
-          stripLegacyFields({ id: uid(), status: 'watching', ...row })
+          stripLegacyFields({
+            id: uid(),
+            status: 'watching',
+            sortOrder: topSortOrder('watching'),
+            ...row,
+          })
         );
         toast('已添加');
       }
@@ -159,6 +225,7 @@ export function useWatchTracker() {
           ...item,
           currentEp: nextEp,
           status: normalizeStatus(item.status),
+          sortOrder: normalizeSortOrder(item.sortOrder),
         })
       );
       toast('进度 +1');
@@ -184,6 +251,7 @@ export function useWatchTracker() {
         stripLegacyFields({
           ...entry,
           status: next,
+          sortOrder: topSortOrder(next),
           updatedAt: Date.now(),
         })
       );
@@ -194,6 +262,58 @@ export function useWatchTracker() {
     }
   }
 
+  async function persistGroupOrder(status, orderedIds) {
+    const idToOrder = new Map(orderedIds.map((id, i) => [id, i]));
+    entries.value = entries.value.map((e) => {
+      if (normalizeStatus(e.status) !== status || !idToOrder.has(e.id)) return e;
+      return { ...e, sortOrder: idToOrder.get(e.id) };
+    });
+    const next = entries.value.map((e) => stripLegacyFields(e));
+    try {
+      await replaceWatchList(next);
+      toast('顺序已保存');
+    } catch (e) {
+      toast('顺序保存失败：' + (e && e.message ? e.message : String(e)));
+      await load();
+    }
+  }
+
+  async function onWatchingReorder(newList) {
+    if (!canReorder.value) return;
+    await persistGroupOrder(
+      'watching',
+      newList.map((e) => e.id)
+    );
+  }
+
+  async function onDoneReorder(newList) {
+    if (!canReorder.value) return;
+    await persistGroupOrder(
+      'done',
+      newList.map((e) => e.id)
+    );
+  }
+
+  function copyTextFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } finally {
+      document.body.removeChild(ta);
+    }
+    return ok;
+  }
+
   async function copyTitle(text) {
     const t = (text || '').trim();
     if (!t) {
@@ -201,10 +321,18 @@ export function useWatchTracker() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(t);
-      toast('已复制标题');
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(t);
+        toast('已复制标题');
+        return;
+      }
     } catch {
-      toast('复制失败（浏览器权限）');
+      /* HTTP 或权限不足时走回退 */
+    }
+    if (copyTextFallback(t)) {
+      toast('已复制标题');
+    } else {
+      toast('复制失败，请手动选择标题复制');
     }
   }
 
@@ -226,6 +354,7 @@ export function useWatchTracker() {
       title: String(x.title || '').trim() || '未命名',
       status: normalizeStatus(x.status),
       currentEp: typeof x.currentEp === 'number' && x.currentEp >= 0 ? x.currentEp : 0,
+      sortOrder: normalizeSortOrder(x.sortOrder),
       updatedAt: typeof x.updatedAt === 'number' ? x.updatedAt : Date.now(),
     });
   }
@@ -305,8 +434,11 @@ export function useWatchTracker() {
     form,
     toastMsg,
     toastShow,
+    canReorder,
     filtered,
     sortedFiltered,
+    watchingList,
+    doneList,
     counts,
     normalizeStatus,
     submitForm,
@@ -314,6 +446,8 @@ export function useWatchTracker() {
     epPlus,
     startEdit,
     setEntryStatus,
+    onWatchingReorder,
+    onDoneReorder,
     copyTitle,
     remove,
     exportJson,
