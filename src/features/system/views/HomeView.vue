@@ -1,15 +1,22 @@
 <template>
   <div class="home">
-    <h1>ForMe</h1>
-    <p class="sub">选择一个入口</p>
-    <nav class="cards" aria-label="主导航">
-      <RouterLink class="tile watch" to="/anime">
-        <span class="tile-title">追番记录</span>
-        <span class="tile-desc">番剧进度与清单</span>
+    <header class="top">
+      <div class="brand">
+        <h1>ForMe</h1>
+        <p class="tag">桌面工具台</p>
+      </div>
+    </header>
+
+    <div class="rule" aria-hidden="true" />
+
+    <nav class="entries" aria-label="主导航">
+      <RouterLink class="row" to="/anime">
+        <span class="row-title">追番记录</span>
+        <span class="row-desc">番剧进度与清单，按周整理</span>
       </RouterLink>
-      <RouterLink class="tile stats" to="/stats">
-        <span class="tile-title">工时统计</span>
-        <span class="tile-desc">每日工时与 Excel 导入导出</span>
+      <RouterLink class="row" to="/stats">
+        <span class="row-title">工时统计</span>
+        <span class="row-desc">每日工时与 Excel 导入导出</span>
       </RouterLink>
     </nav>
   </div>
@@ -21,87 +28,90 @@
 <style scoped>
 .home {
   min-height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 32px 48px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(168, 85, 247, 0.08), transparent), var(--bg);
+  gap: 40px;
 }
 
-h1 {
-  margin: 0 0 8px;
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+.top {
+  display: flex;
+  align-items: flex-end;
 }
 
-.sub {
-  margin: 0 0 28px;
+.brand h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.tag {
+  margin: 6px 0 0;
   font-size: 14px;
   color: var(--muted);
 }
 
-.cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-  width: 100%;
-  max-width: 360px;
+.rule {
+  height: 1px;
+  background: var(--grid);
 }
 
-@media (min-width: 520px) {
-  .cards {
-    grid-template-columns: 1fr 1fr;
-    max-width: 520px;
-  }
-}
-
-a.tile {
+.entries {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+}
+
+a.row {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  padding: 20px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--grid);
-  background: var(--card);
-  color: var(--text);
+  padding: 22px 8px;
+  border-bottom: 1px solid var(--grid);
   text-decoration: none;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  color: var(--text);
+  transition: color 0.15s, background 0.15s;
 }
 
-a.tile:hover {
-  transform: translateY(-2px);
-  border-color: #374151;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+a.row:first-child {
+  border-top: 1px solid var(--grid);
 }
 
-a.tile:focus-visible {
-  outline: 2px solid var(--accent-watch);
+a.row:hover,
+a.row:hover .row-desc {
+  color: var(--accent);
+}
+
+a.row:hover {
+  background: rgba(15, 118, 110, 0.04);
+}
+
+a.row:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-a.tile.stats:focus-visible {
-  outline-color: var(--accent-stats);
-}
-
-.tile-title {
-  font-size: 1.05rem;
+.row-title {
+  font-size: 1.125rem;
   font-weight: 600;
+  transition: color 0.15s;
 }
 
-.tile-desc {
-  font-size: 13px;
+.row-desc {
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.4;
+  transition: color 0.15s;
 }
 
-a.tile.watch .tile-title {
-  color: var(--accent-watch);
-}
-
-a.tile.stats .tile-title {
-  color: var(--accent-stats);
+@media (max-width: 480px) {
+  .home {
+    padding: 40px 20px 32px;
+    gap: 28px;
+  }
 }
 </style>

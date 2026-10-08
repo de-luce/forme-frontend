@@ -15,8 +15,8 @@
         </div>
         <div class="header-end">
           <div class="header-summary">
-            <div v-if="view === 'month'" class="card">本月：{{ format(monthTotal) }}</div>
-            <div v-if="view === 'month'" class="card">{{ monthLeaveText }}</div>
+            <div v-if="view === 'month'" class="summary">本月：{{ format(monthTotal) }}</div>
+            <div v-if="view === 'month'" class="summary">{{ monthLeaveText }}</div>
           </div>
           <button type="button" :class="{ active: view === 'year' }" @click="switchView('year')">总览</button>
         </div>
@@ -89,18 +89,18 @@ const {
 <style scoped>
 .stats-page {
   min-height: 100vh;
-  background: #0b1220;
-  color: #e5e7eb;
+  background: var(--bg);
+  color: var(--text);
 }
 
 header {
   padding: 14px 20px;
-  border-bottom: 1px solid #1f2937;
+  border-bottom: 1px solid var(--grid);
   display: flex;
   justify-content: center;
   position: sticky;
   top: 0;
-  background: rgba(11, 18, 32, 0.92);
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
   z-index: 10;
 }
@@ -117,7 +117,7 @@ header {
 
 .left {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   flex: 1;
@@ -141,47 +141,56 @@ header {
   justify-content: flex-end;
 }
 
-.header-summary .card {
-  padding: 8px 12px;
+.summary {
+  padding: 6px 0;
   font-size: 13px;
-  background: #111827;
-  border: 1px solid #1f2937;
-  border-radius: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary:first-child {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-weight: 500;
 }
 
 button {
-  background: #1f2937;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-  color: #fff;
+  background: transparent;
+  border: 1px solid var(--grid);
+  padding: 7px 12px;
+  border-radius: 4px;
+  color: var(--text);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 button:hover {
-  background: #374151;
+  background: rgba(28, 25, 23, 0.04);
+  border-color: #c4bbb0;
 }
 
 button.active {
-  background: #3b82f6;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #f7f3ec;
 }
 
 button.active:hover {
-  background: #2563eb;
+  filter: brightness(1.05);
 }
 
 select {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #111;
-  color: #fff;
-  border: 1px solid #1f2937;
-  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--grid);
+  font-size: 13px;
 }
 
 .container {
-  padding: 20px;
+  padding: 24px 20px 40px;
   max-width: 1280px;
   margin: auto;
 }
@@ -193,30 +202,37 @@ select {
 }
 
 .day {
-  background: #111827;
-  border-radius: 12px;
+  background: var(--card);
+  border-radius: 4px;
   padding: 14px 12px;
-  border: 1px solid #1f2937;
+  border: 1px solid var(--grid);
 }
 
 .day.today {
-  border: 1px solid #3b82f6;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .day input {
   width: 100%;
   margin-top: 8px;
   padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #1f2937;
-  background: #020617;
-  color: #fff;
+  border-radius: 4px;
+  border: 1px solid var(--grid);
+  background: var(--bg);
+  color: var(--text);
   font-size: 15px;
+  font-family: var(--font-mono);
+}
+
+.day input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .day .date {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -225,36 +241,42 @@ select {
   font-size: 14px;
   font-weight: 600;
   min-height: 1.3em;
+  font-family: var(--font-mono);
 }
 
 .pos {
-  color: #22c55e;
+  color: var(--pos);
 }
 
 .neg {
-  color: #ef4444;
+  color: var(--neg);
 }
 
 .year-no-data {
-  color: #6b7280;
+  color: var(--muted);
   font-weight: 500;
+  font-family: var(--font-body);
 }
 
 .nav-home {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #1f2937;
-  color: #e5e7eb;
+  padding: 6px 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
   text-decoration: none;
-  font-size: 14px;
-  border: 1px solid #1f2937;
+  font-size: 13px;
+  border: none;
+  border-bottom: 1px solid transparent;
+  margin-right: 4px;
 }
 
 .nav-home:hover {
-  background: #374151;
+  background: transparent;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .hidden {
