@@ -59,8 +59,6 @@
 
       <section class="panel">
         <h2>列表</h2>
-        <p v-if="!canReorder" class="reorder-hint">筛选或搜索时不可拖动排序；切回「全部」并清空搜索后可拖动整行调整顺序。</p>
-        <p v-else class="reorder-hint">拖动整行可在同状态内调整顺序（按钮与状态下拉仍可正常点击）。</p>
         <div class="list">
           <p v-if="sortedFiltered.length === 0" class="empty">暂无条目，先在上方添加一部作品吧。</p>
           <template v-else>
@@ -481,12 +479,6 @@ select:focus {
   display: flex;
   gap: 8px;
   margin-top: 14px;
-}
-
-.reorder-hint {
-  margin: -4px 0 12px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .list {
