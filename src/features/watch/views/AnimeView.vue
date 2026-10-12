@@ -107,8 +107,6 @@
                           <option value="done">已看完</option>
                         </select>
                       </label>
-                    </div>
-                    <div class="progress-line">
                       <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
                     </div>
                   </div>
@@ -166,8 +164,6 @@
                           <option value="done">已看完</option>
                         </select>
                       </label>
-                    </div>
-                    <div class="progress-line">
                       <span class="ep">第 {{ e.currentEp ?? 0 }} 话</span>
                     </div>
                   </div>
@@ -563,7 +559,7 @@ select:focus {
 }
 
 .title-copy {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: copy;
@@ -587,7 +583,8 @@ select:focus {
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
 .status-wrap {
@@ -625,16 +622,19 @@ select:focus {
   filter: brightness(0.98);
 }
 
-.progress-line {
-  margin-top: 8px;
-  font-size: 13px;
-}
-
 .ep {
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(15, 118, 110, 0.28);
+  white-space: nowrap;
 }
 
 .card-actions {
