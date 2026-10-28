@@ -10,6 +10,7 @@ import {
   dayKey,
   getMonthStats,
   weekdayLabel as weekdayLabelCore,
+  isWeekend as isWeekendCore,
 } from '@/features/work/domain/workStatsCore.js';
 import { useWorkStatsExcel } from './useWorkStatsExcel.js';
 
@@ -124,6 +125,10 @@ export function useWorkStats(containerRef) {
     return weekdayLabelCore(YEAR, m, d);
   }
 
+  function isWeekend(m, d) {
+    return isWeekendCore(YEAR, m, d);
+  }
+
   function diffLabel(m, d) {
     const v = data[dayKey(YEAR, m, d)];
     const p = parse(v);
@@ -219,6 +224,7 @@ export function useWorkStats(containerRef) {
     monthLeaveText,
     isTodayCell,
     weekdayLabel,
+    isWeekend,
     diffLabel,
     diffClass,
     yearDiffText,

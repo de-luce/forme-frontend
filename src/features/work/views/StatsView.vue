@@ -30,7 +30,7 @@
           :key="selectedMonth + '-' + d"
           :id="'day-' + selectedMonth + '-' + d"
           class="day"
-          :class="{ today: isTodayCell(selectedMonth, d) }"
+          :class="{ today: isTodayCell(selectedMonth, d), weekend: isWeekend(selectedMonth, d) }"
         >
           <div class="date">{{ selectedMonth }}/{{ d }} {{ weekdayLabel(selectedMonth, d) }}</div>
           <input
@@ -75,6 +75,7 @@ const {
   monthLeaveText,
   isTodayCell,
   weekdayLabel,
+  isWeekend,
   diffLabel,
   diffClass,
   yearDiffText,
@@ -207,6 +208,15 @@ select {
   border-radius: 4px;
   padding: 14px 12px;
   border: 1px solid var(--grid);
+}
+
+.day.weekend {
+  background: #faf6f1;
+  border-color: #e7d5c4;
+}
+
+.day.weekend .date {
+  color: #b45309;
 }
 
 .day.today {

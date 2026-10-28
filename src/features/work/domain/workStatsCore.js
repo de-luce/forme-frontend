@@ -13,6 +13,12 @@ export function weekdayLabel(y, m, d) {
   return '周' + WEEKDAY_CN[new Date(y, m - 1, d).getDay()];
 }
 
+/** 周六或周日 */
+export function isWeekend(y, m, d) {
+  const day = new Date(y, m - 1, d).getDay();
+  return day === 0 || day === 6;
+}
+
 export function parse(v) {
   if (!v) return null;
   const [a, b] = String(v).split('.');
