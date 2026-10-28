@@ -6,6 +6,13 @@ export function daysInMonth(y, m) {
   return new Date(y, m, 0).getDate();
 }
 
+const WEEKDAY_CN = ['日', '一', '二', '三', '四', '五', '六'];
+
+/** 按年月日算出「周一」～「周日」 */
+export function weekdayLabel(y, m, d) {
+  return '周' + WEEKDAY_CN[new Date(y, m - 1, d).getDay()];
+}
+
 export function parse(v) {
   if (!v) return null;
   const [a, b] = String(v).split('.');

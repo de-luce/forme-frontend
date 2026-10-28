@@ -9,6 +9,7 @@ import {
   normalize,
   dayKey,
   getMonthStats,
+  weekdayLabel as weekdayLabelCore,
 } from '@/features/work/domain/workStatsCore.js';
 import { useWorkStatsExcel } from './useWorkStatsExcel.js';
 
@@ -119,6 +120,10 @@ export function useWorkStats(containerRef) {
     return m === TODAY.getMonth() + 1 && d === TODAY.getDate();
   }
 
+  function weekdayLabel(m, d) {
+    return weekdayLabelCore(YEAR, m, d);
+  }
+
   function diffLabel(m, d) {
     const v = data[dayKey(YEAR, m, d)];
     const p = parse(v);
@@ -213,6 +218,7 @@ export function useWorkStats(containerRef) {
     monthTotal,
     monthLeaveText,
     isTodayCell,
+    weekdayLabel,
     diffLabel,
     diffClass,
     yearDiffText,

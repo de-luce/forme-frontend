@@ -32,7 +32,7 @@
           class="day"
           :class="{ today: isTodayCell(selectedMonth, d) }"
         >
-          <div class="date">{{ selectedMonth }}/{{ d }}</div>
+          <div class="date">{{ selectedMonth }}/{{ d }} {{ weekdayLabel(selectedMonth, d) }}</div>
           <input
             type="text"
             inputmode="decimal"
@@ -74,6 +74,7 @@ const {
   monthTotal,
   monthLeaveText,
   isTodayCell,
+  weekdayLabel,
   diffLabel,
   diffClass,
   yearDiffText,
