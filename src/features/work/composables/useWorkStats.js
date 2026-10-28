@@ -17,6 +17,18 @@ import { useWorkStatsExcel } from './useWorkStatsExcel.js';
 const YEAR = new Date().getFullYear();
 const TODAY = new Date();
 
+/** 默认填报日：昨天（第二天补填前一天）；跨年则仍用今天 */
+function resolveFillDay() {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() - 1);
+  if (d.getFullYear() !== YEAR) {
+    return { m: TODAY.getMonth() + 1, d: TODAY.getDate() };
+  }
+  return { m: d.getMonth() + 1, d: d.getDate() };
+}
+
+const FILL_DAY = resolveFillDay();
+
 function clonePlain(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
@@ -26,7 +38,7 @@ function clonePlain(obj) {
  */
 export function useWorkStats(containerRef) {
   const data = reactive({});
-  const selectedMonth = ref(TODAY.getMonth() + 1);
+  const selectedMonth = ref(FILL_DAY.m);
   const view = ref('month');
   const importInput = ref(null);
 
@@ -117,8 +129,9 @@ export function useWorkStats(containerRef) {
     monthTotal.value > 0 ? `可提前下班 ${format(monthTotal.value)}` : `需补 ${format(monthTotal.value)}`
   );
 
+  /** 高亮并默认聚焦的填报日（昨天） */
   function isTodayCell(m, d) {
-    return m === TODAY.getMonth() + 1 && d === TODAY.getDate();
+    return m === FILL_DAY.m && d === FILL_DAY.d;
   }
 
   function weekdayLabel(m, d) {
@@ -164,9 +177,8 @@ export function useWorkStats(containerRef) {
     }
   }
 
-  function scrollToTodayCell() {
-    const m = TODAY.getMonth() + 1;
-    const d = TODAY.getDate();
+  function scrollToFillDayCell() {
+    const { m, d } = FILL_DAY;
     if (selectedMonth.value !== m) return;
     const el = document.getElementById(`day-${m}-${d}`);
     if (!el) return;
@@ -177,9 +189,9 @@ export function useWorkStats(containerRef) {
 
   function switchView(v) {
     if (v === 'month') {
-      selectedMonth.value = TODAY.getMonth() + 1;
+      selectedMonth.value = FILL_DAY.m;
       view.value = 'month';
-      nextTick(() => scrollToTodayCell());
+      nextTick(() => scrollToFillDayCell());
     } else {
       view.value = 'year';
     }
@@ -188,9 +200,8 @@ export function useWorkStats(containerRef) {
   function onMonthChange() {
     view.value = 'month';
     nextTick(() => {
-      const mToday = TODAY.getMonth() + 1;
-      if (selectedMonth.value === mToday) {
-        scrollToTodayCell();
+      if (selectedMonth.value === FILL_DAY.m) {
+        scrollToFillDayCell();
       } else {
         scrollMonthGridIntoView();
       }
@@ -205,12 +216,13 @@ export function useWorkStats(containerRef) {
   onMounted(async () => {
     await loadWorkFromServer();
     await nextTick();
-    scrollToTodayCell();
+    scrollToFillDayCell();
   });
 
   return {
     YEAR,
     TODAY,
+    FILL_DAY,
     data,
     selectedMonth,
     view,

@@ -211,17 +211,29 @@ select {
 }
 
 .day.weekend {
-  background: #faf6f1;
-  border-color: #e7d5c4;
+  background: #f0dcc8;
+  border: 2px solid #c2410c;
+  box-shadow: inset 0 0 0 1px rgba(194, 65, 12, 0.18);
 }
 
 .day.weekend .date {
-  color: #b45309;
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.day.weekend input {
+  background: #faf0e4;
+  border-color: #e7a878;
 }
 
 .day.today {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.day.weekend.today {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .day input {
